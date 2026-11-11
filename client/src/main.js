@@ -13,10 +13,13 @@ try {
 import { CHUNK, MAX_Y, SEA, ATLAS_COLS, ATLAS_ROWS, B, BLOCKS, NATURAL_DROPS, TOOLS, MATERIALS, COMMON, RECIPES, SMELT, BIOMES } from '../../shared/registry.js';
 import {createWorldGenerator} from '../../shared/worldgen.js';
 import {makeMaterialAtlas, tileForBlock, createBlockIcon, TILE_SIZE} from './materials.js';
+import {publicInviteUrl, parseInviteUrl, sameOriginSocketUrl} from './invite.js';
 
 // BLOCKBOUND REFORGED · Eigenständiges, frei programmiertes Voxelspiel.
 const $ = id => document.getElementById(id);
 let selectedWorldKey=null, seed=0,mode='survival',isMulti=false,room='Meine Welt',playerName='Spieler',socket=null,clientId=null,serverUrl='',online=1;
+const incomingInvite=parseInviteUrl(window.location.href);
+let autoJoining=!!incomingInvite, lastWRelease=-Infinity, sprintFromDoubleW=false, autoReducedQuality=false, lowFpsSamples=0;
 let terrain = createWorldGenerator(0);
 let worldEdits=new Map(),chunkMap=new Map(),columnCache=terrain.columnCache,buildQueue=[],queued=new Set(),viewDistance=3,lastChunkX=null,lastChunkZ=null,dirtyQueue=[];
 let inventory=Array(36).fill(null),selected=0,health=20,hunger=20,oxygen=10,hungerDebt=0,regenTimer=0,damageCooldown=0,fallDistance=0,spawn={x:.5,y:55,z:.5},lastAutosave=0,saveTimer=null,storageId='';
@@ -111,6 +114,7 @@ function cornerShading(x,y,z,face){
  return out;
 }
 function buildChunk(c){if(c.group)disposeChunk(c);const opaque=buffer(),cut=buffer(),glass=buffer(),water=buffer(),lava=buffer(),flora=buffer(),ox=c.cx*CHUNK,oz=c.cz*CHUNK;
+ const useDetailedAO=Math.abs(c.cx-Math.floor(player.pos.x/CHUNK))<=1&&Math.abs(c.cz-Math.floor(player.pos.z/CHUNK))<=1;
  for(let lx=0;lx<CHUNK;lx++)for(let lz=0;lz<CHUNK;lz++)for(let y=0;y<MAX_Y;y++){
   const x=ox+lx,z=oz+lz,id=getBlock(x,y,z);if(!id)continue;const info=BLOCKS[id];
   if(info.plant){const t=tileFor(id,0),h=id===B.TORCH?.75:.85;for(let a=0;a<2;a++){
@@ -122,7 +126,7 @@ function buildChunk(c){if(c.group)disposeChunk(c);const opaque=buffer(),cut=buff
    const face=FACES[f],nn=getBlock(x+face.d[0],y+face.d[1],z+face.d[2]);if(!isVisibleFace(id,nn))continue;
    const height=(id===B.WATER||id===B.LAVA)?(getBlock(x,y+1,z)===id?1:.90):1;
    const points=face.v.map(p=>[x+p[0],y+p[1]*height,z+p[2]]);
-   quad(buf,points,tileFor(id,f),face.d,face.light,cornerShading(x,y,z,face));
+   quad(buf,points,tileFor(id,f),face.d,face.light,useDetailedAO?cornerShading(x,y,z,face):null);
   }
  }
  const group=new THREE.Group();group.name=`Chunk ${c.cx},${c.cz}`;
@@ -141,17 +145,17 @@ function updateChunkVisibility(){const cx=Math.floor(player.pos.x/CHUNK),cz=Math
  jobs.sort((a,b)=>a.d-b.d);for(const job of jobs)queueChunk(job.a,job.b);
  for(const [key,c] of chunkMap){if(Math.abs(c.cx-cx)>viewDistance+2||Math.abs(c.cz-cz)>viewDistance+2){disposeChunk(c);chunkMap.delete(key);}}
 }
-function processChunkQueue(){let count=0;while(count<2&&buildQueue.length){const [cx,cz]=buildQueue.shift(),key=chunkKey(cx,cz);queued.delete(key);
+function processChunkQueue(){let count=0;while(count<1&&buildQueue.length){const [cx,cz]=buildQueue.shift(),key=chunkKey(cx,cz);queued.delete(key);
   if(Math.abs(cx-Math.floor(player.pos.x/CHUNK))>viewDistance+1||Math.abs(cz-Math.floor(player.pos.z/CHUNK))>viewDistance+1)continue;
   const c=chunkAt(cx,cz);if(!c.group||c.dirty){buildChunk(c);count++;}
  }}
 function setupScene(){scene=new THREE.Scene();sky=new THREE.Color(0x89bde1);scene.background=sky;fog=new THREE.Fog(sky,40,135);scene.fog=fog;
  camera=new THREE.PerspectiveCamera(76,innerWidth/innerHeight,.055,250);renderer=new THREE.WebGLRenderer({canvas:$('viewport'),antialias:false,powerPreference:'high-performance'});
- renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.16;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  sun=new THREE.DirectionalLight(0xfff0ce,1.65);scene.add(sun);sun.castShadow=true;
- sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-42;sun.shadow.camera.right=42;
+ sun.shadow.mapSize.set(768,768);sun.shadow.camera.left=-42;sun.shadow.camera.right=42;
  sun.shadow.camera.top=42;sun.shadow.camera.bottom=-42;sun.shadow.camera.near=.5;sun.shadow.camera.far=225;
  sun.shadow.bias=-.00015;sun.shadow.normalBias=.035;scene.add(sun.target);
  ambient=new THREE.HemisphereLight(0xc2e7ff,0x445b43,.79);scene.add(ambient);
@@ -326,19 +330,22 @@ function closeChat(){chatOpen=false;$('chat').classList.add('hidden');$('chatInp
 function toMenu(){if(!isMulti)saveSolo();else if(socket?.readyState===WebSocket.OPEN)send({t:'state',inventory:mode==='survival'?inventory:null,health,hunger,player:[player.pos.x,player.pos.y,player.pos.z]});if(socket)socket.close();location.reload();}
 function chooseSpawn(){let best=null,score=Infinity;for(let r=0;r<=650;r+=r<80?8:24){for(let i=0;i<28;i++){const theta=i*2*Math.PI/28,x=Math.floor(Math.cos(theta)*r),z=Math.floor(Math.sin(theta)*r),c=column(x,z);if(c.h<=SEA+2||c.h>74||c.biome===5)continue;const slope=Math.abs(column(x+2,z).h-c.h)+Math.abs(column(x,z+2).h-c.h);const s=r*.45+slope*5+(c.biome===2?15:0);if(s<score){score=s;best=[x,c.h+2,z];}}if(best&&score<Math.max(30,r*.45+22))break;}
  const [x,y,z]=best||[5,column(5,5).h+3,5];return {x:x+.5,y,z:z+.5};}
-function beginSession(opts={}){resetDropped();seed=opts.seed|0;terrain=createWorldGenerator(seed);columnCache=terrain.columnCache;mode=opts.mode||mode;worldEdits=new Map(opts.edits||[]);resetChunkWorld();inventory=Array(36).fill(null);
+function beginSession(opts={}){resetDropped();sprintFromDoubleW=false;lastWRelease=-Infinity;seed=opts.seed|0;terrain=createWorldGenerator(seed);columnCache=terrain.columnCache;mode=opts.mode||mode;worldEdits=new Map(opts.edits||[]);resetChunkWorld();inventory=Array(36).fill(null);
  if(mode==='creative'){for(let i=0;i<9;i++)inventory[i]={id:COMMON[i],count:64,wear:0};flying=true;}
  else{flying=false;if(Array.isArray(opts.profile?.inventory)&&opts.profile.inventory.length===36){inventory=opts.profile.inventory.map(s=>s&&itemInfo(s.id)&&Number.isInteger(s.count)&&s.count>0?{id:s.id,count:Math.min(s.count,TOOLS[s.id]?1:64),wear:Math.max(0,Number(s.wear)||0)}:null);}}
  health=mode==='creative'?20:Math.max(1,Math.min(20,Number(opts.profile?.health)||20));hunger=mode==='creative'?20:Math.max(0,Math.min(20,Number(opts.profile?.hunger ?? 20)));oxygen=10;worldTime=Number.isFinite(opts.time)?opts.time:.25;
  spawn=chooseSpawn();player.pos.set(spawn.x,spawn.y,spawn.z);if(Array.isArray(opts.profile?.player)&&opts.profile.player.length===3){let [x,y,z]=opts.profile.player.map(Number);if([x,y,z].every(Number.isFinite)&&Math.abs(x)<500000&&Math.abs(z)<500000&&y>0&&y<MAX_Y+30)player.pos.set(x,y,z);}player.v.set(0,0,0);player.grounded=false;
  if(!scene)setupScene();for(const d of opts.drops||[])spawnDropped(d);started=true;paused=false;dead=false;$('menu').classList.add('hidden');$('hud').classList.remove('hidden');$('modeTag').textContent=mode==='creative'?'KREATIV':'SURVIVAL';
  drawHotbar();showStats();updateChunkVisibility();processChunkQueue();processChunkQueue();
- $('worldInfo').textContent=`${room} · Seed ${seed}`;updateNetworkInfo();clock.getDelta();requestAnimationFrame(animate);lockPointer();toast(mode==='creative'?'Kreativ: F = Fliegen · E = Alle Blöcke':'Halte Linksklick: Blöcke bekommen Risse. Laufe über Items, um sie einzusammeln.');
+ $('shareInvite').classList.toggle('hidden',!isMulti);$('pauseInvite').classList.toggle('hidden',!isMulti);
+ $('worldInfo').textContent=`${room} · Seed ${seed}`;updateNetworkInfo();clock.getDelta();requestAnimationFrame(animate);if(!autoJoining)lockPointer();toast(autoJoining?'Du bist der Welt beigetreten! Klicke auf das Spiel, um die Maus zu aktivieren.':mode==='creative'?'Kreativ: F = Fliegen · E = Alle Blöcke':'Halte Linksklick: Blöcke bekommen Risse. Laufe über Items, um sie einzusammeln.');autoJoining=false;
 }
 function startSolo(){const raw=$('worldSeed').value.trim();storageId='blockbound:reforged:v2:'+encodeURIComponent(room)+':'+mode+(raw?':'+encodeURIComponent(raw):'');if(selectedWorldKey)storageId=selectedWorldKey;const stored=localStore();const s=raw?hashSeed(raw):stored?.seed||newRandomSeed();if(stored&&stored.seed!==s)toast('Ein neuer Welt-Seed wurde ausgewählt.');beginSession({seed:s,mode,edits:stored?.seed===s?stored.edits||[]:[],drops:stored?.seed===s?stored.drops||[]:[],profile:stored?.seed===s?stored:null});scheduleSave();}
 function updateNetworkInfo(){const ok=isMulti&&socket?.readyState===WebSocket.OPEN&&clientId!==null;$('connection').textContent=isMulti?`● ${ok?'Verbunden':'Verbinde …'} · ${online} Spieler · ${mode==='creative'?'Kreativ':'Survival'}`:'● Einzelspieler · 1 Spieler';}
 function send(msg){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(msg));}
-function connectMultiplayer(){let address=$('serverAddress').value.trim()||'ws://localhost:3000';if(!/^wss?:\/\//.test(address))address=(location.protocol==='https:'?'wss://':'ws://')+address;let url;
+function connectMultiplayer(){let address=$('serverAddress').value.trim()||sameOriginSocketUrl(window.location.href);
+ if(!address){$('menuError').textContent='Hier fehlt noch ein öffentlicher WSS-Spielserver. Trage seine Adresse ein (z. B. wss://dein-server.onrender.com/ws).';return;}
+ if(location.protocol==='https:'&&address.startsWith('ws://')){$('menuError').textContent='Diese HTTPS-Webseite benötigt eine sichere wss://-Verbindung.';return;}if(!/^wss?:\/\//.test(address))address=(location.protocol==='https:'?'wss://':'ws://')+address;let url;
  try{url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Adresse');if(url.pathname==='/'||!url.pathname)url.pathname='/ws';}catch{return $('menuError').textContent='Bitte gib eine gültige ws://- oder wss://-Serveradresse an.';}
  serverUrl=url.toString();$('menuError').textContent='Verbinde mit dem Multiplayer-Server …';$('start').disabled=true;
  const ws=new WebSocket(serverUrl);socket=ws;let joined=false;
@@ -385,7 +392,9 @@ function respawnPlayer(){if(mode==='survival')inventory=Array(36).fill(null);hea
 function updatePhysics(dt){if(paused||chatOpen||inventoryOpen||dead)return;
  const water=feetBlock()===B.WATER||headBlock()===B.WATER,headWet=headBlock()===B.WATER,fire=feetBlock()===B.LAVA;
  let horizontal=(keys.KeyD?1:0)-(keys.KeyA?1:0),forward=(keys.KeyW?1:0)-(keys.KeyS?1:0),len=Math.hypot(horizontal,forward)||1;
- let sprint=(keys.ShiftLeft||keys.ShiftRight)&&!flying&&!keys.ControlLeft&&forward>0,slow=keys.ControlLeft||keys.ControlRight;
+ let slow=keys.ControlLeft||keys.ControlRight;
+ let sprint=(sprintFromDoubleW||keys.ShiftLeft||keys.ShiftRight)&&!flying&&!slow&&forward>0&&(mode==='creative'||hunger>=6);
+ if(!keys.KeyW||forward<=0||slow||flying)sprintFromDoubleW=false;
  let speed=flying?8.1:water?2.3:sprint?5.65:slow?1.65:4.3;
  const vx=(Math.cos(yaw)*horizontal-Math.sin(yaw)*forward)/len*speed,
  vz=(-Math.sin(yaw)*horizontal-Math.cos(yaw)*forward)/len*speed;
@@ -501,7 +510,13 @@ function updateMine(dt){if(!holdMine||paused||inventoryOpen||chatOpen||dead||doc
  else $('breakbar').classList.add('hidden');if(mineProgress>=1){finishMine();showCracks(null,0);}
 }
 function usePressed(){if(performance.now()-lastUse<170)return;lastUse=performance.now();if(!paused&&!inventoryOpen&&!chatOpen&&!dead)placeSelected();}
-function makeHud(now){if(now-lastFPS>700){fps=Math.round(frames*1000/(now-lastFPS));lastFPS=now;frames=0;}
+function makeHud(now){if(now-lastFPS>700){fps=Math.round(frames*1000/(now-lastFPS));lastFPS=now;frames=0;
+  // On slow machines reduce GPU pixel work once, without changing the saved world.
+  if(started&&!autoReducedQuality&&performance.now()>8000){
+   lowFpsSamples=fps<35?lowFpsSamples+1:0;
+   if(lowFpsSamples>=4&&renderer){autoReducedQuality=true;renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1));toast('Leistungsoptimierung: Renderauflösung reduziert (mehr FPS).');}
+  }
+ }
  if(now-lastHud>350){lastHud=now;const c=column(Math.floor(player.pos.x),Math.floor(player.pos.z));$('coords').textContent=`XYZ ${Math.floor(player.pos.x)} / ${Math.floor(player.pos.y)} / ${Math.floor(player.pos.z)}${showF3?' · '+fps+' FPS · '+chunkMap.size+' Chunks':''}`;
  $('worldInfo').textContent=`${room} · ${BIOMES[c.biome]} · Seed ${seed}${showF3?' · '+(flying?'Fliegen':'Boden'):''}`;}
  if(now-lastMap>1300){lastMap=now;drawMiniMap();}
@@ -513,6 +528,17 @@ function animate(now){if(!started)return;requestAnimationFrame(animate);frames++
 }
 
 let chosenMode='survival',chosenConnection='solo';
+function copyWorldInvitation(){
+ if(!isMulti||socket?.readyState!==WebSocket.OPEN||clientId===null){toast('Zuerst mit einer Multiplayer-Welt verbinden.');return;}
+ try{
+  const link=publicInviteUrl({pageUrl:location.href,serverUrl,room,mode,seed});
+  if(navigator.clipboard?.writeText){navigator.clipboard.writeText(link).then(()=>toast('Einladungslink kopiert – an Freunde senden!')).catch(()=>fallbackCopy(link));}
+  else fallbackCopy(link);
+ }catch(error){toast(error.message||'Öffentlicher WSS-Server erforderlich.');}
+}
+function fallbackCopy(link){const field=$('inviteLink');field.value=link;field.classList.remove('hidden');field.select();try{document.execCommand('copy');toast('Einladungslink kopiert.');field.classList.add('hidden');}catch{toast('Link markieren und kopieren.');}}
+$('shareInvite').addEventListener('click',copyWorldInvitation);
+$('pauseInvite').addEventListener('click',copyWorldInvitation);
 function wireSelector(container,callback){for(const btn of $(container).querySelectorAll('button'))btn.addEventListener('click',()=>{$(container).querySelectorAll('button').forEach(el=>el.classList.toggle('selected',el===btn));callback(btn.dataset.value);});}
 wireSelector('modeChooser',v=>{chosenMode=v;selectedWorldKey=null;});
 wireSelector('connChooser',v=>{chosenConnection=v;$('multifields').classList.toggle('hidden',v!=='multi');});
@@ -531,6 +557,10 @@ $('soundSetting').onchange=e=>muted=!e.target.checked;
 $('tabItems').onclick=()=>setTab('items');$('tabCraft').onclick=()=>setTab('craft');$('tabFurnace').onclick=()=>setTab('furnace');
 $('chat').addEventListener('submit',e=>{e.preventDefault();const value=$('chatInput').value.trim().slice(0,200);if(value){if(isMulti)send({t:'chat',message:value});else message(playerName,value);}closeChat();});
 window.addEventListener('keydown',e=>{
+ if(e.code==='KeyW'&&!e.repeat&&!keys.KeyW&&started&&!paused&&!chatOpen&&!inventoryOpen&&!dead){
+  const time=performance.now();
+  if(time-lastWRelease<=320){sprintFromDoubleW=true;}
+ }
  if(e.code==='Tab'&&started)e.preventDefault();
  if(!started)return;
  if(e.code==='Escape'){
@@ -549,8 +579,10 @@ window.addEventListener('keydown',e=>{
  if(e.code==='Space'&&!e.repeat){e.preventDefault();attemptJump();}
  keys[e.code]=true;
 });
-window.addEventListener('keyup',e=>keys[e.code]=false);
-window.addEventListener('blur',()=>{keys={};holdMine=false;});
+window.addEventListener('keyup',e=>{keys[e.code]=false;
+ if(e.code==='KeyW'){lastWRelease=performance.now();sprintFromDoubleW=false;}
+});
+window.addEventListener('blur',()=>{keys={};holdMine=false;sprintFromDoubleW=false;lastWRelease=-Infinity;});
 window.addEventListener('wheel',e=>{if(!started||paused||inventoryOpen||chatOpen||dead)return;e.preventDefault();selected=(selected+Math.sign(e.deltaY)+9)%9;drawHotbar();},{passive:false});
 $('viewport').addEventListener('mousedown',e=>{if(!started||paused||inventoryOpen||chatOpen||dead)return;e.preventDefault();if(document.pointerLockElement!==renderer.domElement){lockPointer();return;}
  if(e.button===0){holdMine=true;mineProgress=0;mineKey='';}else if(e.button===2){usePressed();holdUse=true;}
@@ -590,6 +622,20 @@ function listLocalWorlds(){
  }
 }
 listLocalWorlds();
+// An invitation preselects the exact server/room/mode and joins without extra forms.
+if(incomingInvite){
+ chosenMode=incomingInvite.mode;chosenConnection='multi';selectedWorldKey=null;
+ $('worldName').value=incomingInvite.room;$('worldSeed').value=incomingInvite.seed;
+ $('modeChooser').querySelectorAll('button').forEach(b=>b.classList.toggle('selected',b.dataset.value===chosenMode));
+ $('connChooser').querySelectorAll('button').forEach(b=>b.classList.toggle('selected',b.dataset.value==='multi'));
+ $('multifields').classList.remove('hidden');
+ $('serverAddress').value=incomingInvite.server||sameOriginSocketUrl(location.href);
+ const savedName=$('playerName').value.trim();
+ if(!savedName||savedName==='Spieler'){const n=new Uint32Array(1);crypto.getRandomValues(n);$('playerName').value='Gast-'+(n[0]%90000+10000);}
+ if($('serverAddress').value){setTimeout(()=>$('start').click(),50);}
+ else $('menuError').textContent='Der Einladungslink benötigt eine öffentliche WSS-Serveradresse. Bitte den Gastgeber kontaktieren.';
+}
+else $('serverAddress').value=sameOriginSocketUrl(location.href);
 
 window.BLOCKBOUND_READY=true;
 document.getElementById("fatal")?.classList.add("hidden");

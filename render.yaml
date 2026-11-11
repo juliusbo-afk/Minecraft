@@ -1,0 +1,17 @@
+# One-click public test deployment. Render free has EPHEMERAL storage: worlds
+# can be LOST on restart / redeploy / sleep. Use persistent disk on paid plan.
+services:
+  - type: web
+    name: blockbound-ultimate-online
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm run check
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SAVE_DIR
+        value: ./saves

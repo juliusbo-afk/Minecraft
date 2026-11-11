@@ -175,3 +175,12 @@ Tests laufen unter Node.js 20+. Eine Three.js-Browsertestsuite ist aktuell noch 
 ## Entwicklungsstand
 
 Referenz für die konzeptionelle Ausrichtung ist **Minecraft Java Edition 1.20.1**; keine kommerzielle, technische oder markenrechtliche Verbindung. Genauere Statusangaben: [Feature-Matrix](docs/FEATURES.md), [Architektur](docs/ARCHITECTURE.md), [Testbericht](docs/TESTS.md).
+
+
+## Version 6.0: Doppelt-W-Sprint, mehr FPS und Einladungslink
+
+**Sprint:** W zweimal schnell hintereinander drücken und beim zweiten Mal gedrückt halten. Shift funktioniert weiterhin.
+
+**Online-Multiplayer:** Wenn du das Spiel auf einem öffentlichen HTTPS/WSS-Server (z. B. Render) betreibst, kannst du im Multiplayer auf **🔗 Einladungslink kopieren** klicken. Dein Freund öffnet den Link und betritt automatisch denselben Spielraum. GitHub Pages allein stellt keinen WebSocket-Server bereit. Siehe [Online-Multiplayer-Anleitung](docs/ONLINE_MULTIPLAYER.md) und [`render.yaml`](render.yaml). **Render Free ist nicht für dauerhafte Weltspeicherung geeignet.**
+
+**Performance:** Pro Frame weniger Chunk-Mesh-Arbeit; bei entfernten Chunks reduzierte AO-Kosten, geringere GPU-Auflösung bei dauerhaft niedrigen FPS. Die visuelle Qualität und Performance sind weiterhin abhängig von Browser und Rechner.

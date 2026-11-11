@@ -14,3 +14,6 @@
 .invslot .block-icon{width:37px!important;height:37px!important}
 .recipe-icon .block-icon{width:36px!important;height:36px!important}
 .slot.current .block-icon{filter:drop-shadow(0 2px 3px #000a) saturate(1.12)}
+
+/* Multiplayer invitation controls */
+.share-btn{cursor:pointer;color:#ecffd9;font-weight:700;border:1px solid #8abe99;white-space:nowrap}.share-btn:hover{background:#285a4b}#inviteLink:not(.hidden){position:fixed;bottom:18px;left:20px;width:min(94vw,780px);z-index:200;padding:12px;background:#142733;color:white;border:1px solid #b4e77a}
