@@ -71,12 +71,37 @@ test('static game, independent multiplayer clients, block validation and persist
   survivor.send({t:'mine_start',x:4,y:h,z:5,slot:0});
   await delay(1900);
   survivor.send({t:'mine',x:4,y:h,z:5,slot:0});
+  const dropped=await survivor.wait('drop_spawn',m=>m.drop?.itemId?.startsWith('b:'));
+  assert.equal(dropped.drop.count,1,'mining produces a real dropped-item entity');
+  const initialInventory=await survivor.wait('inventory');
+  assert.ok(initialInventory.inventory.every(x=>x===null),'mining does not immediately award a block');
+  const other=await client(port);players.push(other);
+  other.send({t:'join',room:'Survival Protocol Check',seed:'345',mode:'survival',name:'OtherCollector'});
+  const otherWelcome=await other.wait('welcome');
+  assert.ok(otherWelcome.drops.some(d=>d.id===dropped.drop.id),'new player sees existing drops');
+  await delay(800);
+  other.send({t:'pickup',id:dropped.drop.id});await delay(120);
+  assert.ok(!other.messages.some(m=>m.t==='inventory'&&m.inventory.some(x=>x!==null)),'remote player cannot pick up drop');
+  survivor.send({t:'pickup',id:dropped.drop.id});
   const inv=await survivor.wait('inventory',m=>m.inventory.some(x=>x?.count>=1));
-  assert.ok(inv.inventory.some(x=>x?.id?.startsWith('b:')),'server awarded a survival block drop');
+  assert.ok(inv.inventory.some(x=>x?.id?.startsWith('b:')),'pickup now awards collected block');
+  const removed=await other.wait('drop_remove',m=>m.id===dropped.drop.id);
+  assert.equal(removed.id,dropped.drop.id,'everyone sees the item disappear after collection');
+  other.send({t:'pos',x:4.5,y:h+1.2,z:5.5,yaw:0,pitch:0});await delay(150);
+  other.send({t:'pickup',id:dropped.drop.id});await delay(150);
+  assert.ok(!other.messages.some(m=>m.t==='inventory'&&m.inventory.some(x=>x!==null)),'same drop cannot be collected twice');
   survivor.send({t:'state',inventory:Array(36).fill({id:'m:diamond',count:64}),health:20,hunger:20});
   await delay(100);survivor.send({t:'swap',a:0,b:1});
   const updated=await survivor.wait('inventory',m=>m.inventory[1]?.id===inv.inventory[0].id);
   assert.equal(updated.inventory.some(x=>x?.id==='m:diamond'),false,'server ignored forged inventory state');
+  // Drop persistence: place the collected clay elsewhere, mine it, leave the item untouched, restart.
+  await delay(120);
+  survivor.send({t:'place',x:6,y:h+1,z:5,slot:1});
+  await survivor.wait('edit',m=>m.x===6&&m.y===h+1&&m.z===5&&m.id!==0);
+  await delay(130);survivor.send({t:'mine_start',x:6,y:h+1,z:5,slot:0});
+  await delay(1650);survivor.send({t:'mine',x:6,y:h+1,z:5,slot:0});
+  const pending=await survivor.wait('drop_spawn',m=>m.drop.x===6.5&&m.drop.z===5.5);
+  assert.ok(pending.drop.id,'an uncollected drop is created');
   players.forEach(p=>p.ws.close());await delay(250);await stop(proc);
   const savefiles=readdirSync(dir).filter(x=>x.endsWith('.json'));assert.ok(savefiles.length>=1,'world file saved');
   const data=savefiles.map(f=>JSON.parse(readFileSync(path.join(dir,f),'utf8'))).find(x=>x.name==='UnitTest World');
@@ -85,5 +110,9 @@ test('static game, independent multiplayer clients, block validation and persist
   proc=await launch(port,dir);const reconnect=await client(port);players.push(reconnect);
   reconnect.send({t:'join',room:'UnitTest World',mode:'creative',name:'PlayerOne'});
   const restored=await reconnect.wait('welcome');assert.ok(restored.edits.some(([loc,id])=>loc==='8,63,5'&&id===21));
+  const collectLater=await client(port);players.push(collectLater);
+  collectLater.send({t:'join',room:'Survival Protocol Check',mode:'survival',name:'Survivor'});
+  const welcomeLater=await collectLater.wait('welcome');
+  assert.ok(welcomeLater.drops.some(d=>d.id===pending.drop.id),'uncollected item survived server restart');
  }finally{players.forEach(p=>{try{p.ws.close();}catch{}});if(proc)await stop(proc);rmSync(dir,{recursive:true,force:true});}
 });

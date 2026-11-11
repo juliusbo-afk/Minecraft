@@ -1,4 +1,4 @@
-# Architektur – Alpha 3.0
+# Architektur – Alpha 4.0
 
 ## Referenz und Grenzen
 
@@ -63,3 +63,12 @@ Servernachrichten: `welcome`, `join`, `leave`, `pos`, `edit`, `inventory`, `chat
 4. Bei einem großflächigen öffentlichen Betrieb werden SQLite, serverseitige räumliche Abonnements, Bandbreitenbegrenzung und Authentifizierung benötigt.
 5. Klimakarten, Erosion und Höhenfunktion sind eigene Näherungen, keine Minecraft-Originalalgorithmen.
 6. Browser-3D-Rendering importiert Three.js von einem CDN. Offline-Build mit lokaler Assetkopie wäre eine zukünftige Verbesserung.
+
+
+## 4.0: Blockschäden, Item-Entitäten, Beleuchtung
+
+- Der Client erzeugt 10 transparente Riss-Texturen. Das Overlay liegt nur während des aktiven Survival-Abbaus auf dem aktuellen Block und verschwindet bei Abbruch oder Abschluss.
+- Die Texture-Atlas-Materialien verwenden feinere Muster und die sichtbaren Blockecken werden lokal abgedunkelt. Standardmaterialien, gedämpftes Umgebungslicht, weiche Schatten und selbst erzeugte Wolken ergänzen die Voxel-Optik. Die Schattenauflösung ist begrenzt, um Leistung zu sparen.
+- Im Einzelspieler-Modus werden Survival-Drops als physische Objekte lokal erzeugt und im vorhandenen Welt-Speicherstand persistiert. Beim Aufsammeln muss ausreichend Inventarkapazität bestehen.
+- Im Multiplayer-Modus gehören Item-Drops zu einer Serverwelt (`drops`-Map) und werden mit den Nachrichten `drop_spawn`/`drop_remove` an Clients übertragen. Serverseitig werden Entfernung, Sperrfrist, Inventarplatz und Existenz des Objekts vor atomarer Vergabe geprüft. `welcome` enthält liegen gelassene Drops.
+- Die simulierte Flugkurve der Items ist eine visuelle Client-Näherung. Der Server berechnet eine Landeposition unterhalb des Abbauortes und behandelt diese als maßgeblich für den Pickup; es existiert noch keine vollständige serverseitige Starrkörperphysik.

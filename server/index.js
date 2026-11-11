@@ -30,12 +30,20 @@ function roomFor(name,mode,seed){const id=`${mode}:${name.toLowerCase()}`;if(roo
  const edits=new Map();for(const pair of data?.edits||[]){if(!Array.isArray(pair)||pair.length!==2||typeof pair[0]!=='string'||!Number.isInteger(pair[1]))continue;
   const xyz=pair[0].split(',').map(Number);if(validXYZ(...xyz)&&pair[1]>=0&&pair[1]<BLOCKS.length)edits.set(pair[0],pair[1]);}
  const profiles=new Map();for(const [name,prof] of Object.entries(data?.profiles||{}))if(prof&&typeof prof==='object')profiles.set(name,{inventory:sanitizeInv(prof.inventory),player:prof.player,health:prof.health,hunger:prof.hunger});
- const r={id,name,mode,seed:value,edits,profiles,players:new Set(),generator:createWorldGenerator(value),cache:new Map(),filename,dirty:!data,dayStart:data?.dayStart||Date.now(),timer:null};
+ // Item entities belong to the world, not to a player's inventory. Persist them across restarts.
+ const drops=new Map();
+ for(const d of data?.drops||[]){
+  if(typeof d?.id!=='string'||typeof d.itemId!=='string'||!Number.isFinite(d.x)||!Number.isFinite(d.y)||!Number.isFinite(d.z)||!Number.isInteger(d.count)||d.count<1||d.count>64)continue;
+  if(!(d.itemId in MATERIALS)&&!(d.itemId in TOOLS)&&!(d.itemId.startsWith('b:')&&BLOCKS[+d.itemId.slice(2)]))continue;
+  if(drops.size>=800)break;
+  drops.set(d.id,{id:d.id,itemId:d.itemId,count:d.count,x:d.x,y:d.y,z:d.z,spawnY:Number.isFinite(d.spawnY)?d.spawnY:d.y,createdAt:Number.isFinite(d.createdAt)?d.createdAt:Date.now()-1000});
+ }
+ const r={id,name,mode,seed:value,edits,profiles,drops,players:new Set(),generator:createWorldGenerator(value),cache:new Map(),filename,dirty:!data,dayStart:data?.dayStart||Date.now(),timer:null};
  rooms.set(id,r);if(!data)dirty(r);console.log(`[Welt] ${id} – Seed ${value}, ${edits.size} Änderungen`);return r;
 }
 function dirty(room){room.dirty=true;clearTimeout(room.timer);room.timer=setTimeout(()=>save(room),1700);room.timer.unref?.();}
 function save(room){clearTimeout(room.timer);if(!room.dirty)return;try{
- const snapshot={version:3,seed:room.seed,name:room.name,mode:room.mode,dayStart:room.dayStart,edits:[...room.edits],profiles:Object.fromEntries(room.profiles),savedAt:new Date().toISOString()};
+ const snapshot={version:4,seed:room.seed,name:room.name,mode:room.mode,dayStart:room.dayStart,edits:[...room.edits],drops:[...room.drops.values()],profiles:Object.fromEntries(room.profiles),savedAt:new Date().toISOString()};
  const tmp=room.filename+'.tmp';fs.writeFileSync(tmp,JSON.stringify(snapshot));fs.renameSync(tmp,room.filename);room.dirty=false;
  }catch(e){console.error('[Speicherfehler]',e);}}
 function generated(room,x,y,z){if(y<=0)return B.BEDROCK;if(y>=MAX_Y)return B.AIR;
@@ -51,7 +59,8 @@ function gravity(room,x,y,z){for(let yy=Math.max(1,y);yy<Math.min(MAX_Y,y+20);yy
 }}
 function invCount(c,id){return c.inventory.reduce((sum,s)=>sum+(s?.id===id?s.count:0),0);}
 function invRemove(c,id,n){if(invCount(c,id)<n)return false;for(let i=35;i>=0&&n>0;i--){const s=c.inventory[i];if(s?.id===id){let x=Math.min(s.count,n);s.count-=x;n-=x;if(!s.count)c.inventory[i]=null;}}return true;}
-function invAdd(c,id,n){if(!id||n<=0)return true;const max=id in TOOLS?1:64;let remain=n;
+function invCapacity(c,id){const max=id in TOOLS?1:64;return c.inventory.reduce((n,s)=>n+(s===null?max:s.id===id?max-s.count:0),0);}
+function invAdd(c,id,n){if(!id||n<=0)return true;if(invCapacity(c,id)<n)return false;const max=id in TOOLS?1:64;let remain=n;
  for(const s of c.inventory){if(s?.id===id&&s.count<max){const k=Math.min(max-s.count,remain);s.count+=k;remain-=k;if(!remain)return true;}}
  for(let i=0;i<c.inventory.length&&remain;i++){if(c.inventory[i]===null){const k=Math.min(max,remain);c.inventory[i]={id,count:k,wear:0};remain-=k;}}return remain===0;}
 function pushInv(c){send(c,{t:'inventory',inventory:c.inventory,health:c.health,hunger:c.hunger});if(c.room){c.room.profiles.set(c.name,profile(c));dirty(c.room);}}
@@ -65,13 +74,38 @@ function mineTime(c,id,slot){const b=BLOCKS[id];if(!b||id===B.BEDROCK||b.liquid)
  if(!b.hardness)return .14;const s=c.inventory[slot],tool=s&&TOOLS[s.id],good=tool?.kind===b.tool;
  return b.hardness*(good?1.4/tool.speed:b.tool==='pick'?5:2.5);}
 function canHarvest(c,id,slot){const b=BLOCKS[id],s=c.inventory[slot],t=s&&TOOLS[s.id];return b.tool!=='pick'||b.tier===0||!!t&&t.kind==='pick'&&t.tier>=b.tier;}
+// Drops are server-owned entities; pickup is atomic and validated against position/capacity.
+function landingY(room,x,y,z){for(let h=Math.min(MAX_Y-1,Math.floor(y));h>=1;h--){
+  const id=block(room,Math.floor(x),h,Math.floor(z));
+  if(id!==B.AIR&&!BLOCKS[id].liquid&&!BLOCKS[id].plant)return h+1.20;
+ }return 1.20;}
+function spawnDrop(room,itemId,x,y,z,count=1){
+ if(!itemId||room.mode!=='survival'||room.drops.size>=800)return;
+ const id=crypto.randomUUID();const spawnY=y+.65;
+ const d={id,itemId,count,x:x+.5,z:z+.5,y:landingY(room,x,y,z),spawnY,createdAt:Date.now()};
+ room.drops.set(id,d);dirty(room);broadcast(room,{t:'drop_spawn',drop:d});return d;
+}
+function tryPickup(c,id){
+ const room=c.room,d=room?.drops.get(id),now=Date.now();
+ if(!d||room.mode!=='survival'||now-d.createdAt<650)return false;
+ if(Math.hypot(c.x-d.x,c.z-d.z)>1.70||Math.abs((c.y+.9)-d.y)>2.15)return false;
+ if(!invAdd(c,d.itemId,d.count))return false;
+ room.drops.delete(id);dirty(room);broadcast(room,{t:'drop_remove',id});pushInv(c);return true;
+}
+function pickupNearby(c){if(c.room?.mode!=='survival')return;for(const d of c.room.drops.values()){
+  if(Math.abs(c.x-d.x)<1.7&&Math.abs(c.z-d.z)<1.7)tryPickup(c,d.id);
+}}
 function sendError(c,message){send(c,{t:'error',message});}
 function validSlot(s){return Number.isInteger(s)&&s>=0&&s<36;}
 function perform(c,m){const r=c.room,now=Date.now();if(!r)return;
  if(m.t==='pos'){
   if(now-c.lastPos<55)return;
   if([m.x,m.y,m.z,m.yaw,m.pitch].some(v=>typeof v!=='number'||!Number.isFinite(v))||Math.abs(m.x)>1e6||Math.abs(m.z)>1e6||m.y<0||m.y>MAX_Y+15)return;
-  if(!c.movedOnce || Math.hypot(c.x-m.x,c.y-m.y,c.z-m.z)<50){c.x=m.x;c.y=m.y;c.z=m.z;c.movedOnce=true;c.lastPos=now;broadcast(r,{t:'pos',id:c.id,x:c.x,y:c.y,z:c.z,yaw:m.yaw,pitch:m.pitch},c);}return;
+  if(!c.movedOnce || Math.hypot(c.x-m.x,c.y-m.y,c.z-m.z)<50){c.x=m.x;c.y=m.y;c.z=m.z;c.movedOnce=true;c.lastPos=now;broadcast(r,{t:'pos',id:c.id,x:c.x,y:c.y,z:c.z,yaw:m.yaw,pitch:m.pitch},c);pickupNearby(c);}return;
+ }
+ if(m.t==='pickup'){
+  if(typeof m.id!=='string'||m.id.length>80||now-c.lastPickup<75)return;
+  c.lastPickup=now;tryPickup(c,m.id);return;
  }
  if(m.t==='mine_start'){
   if(!validXYZ(m.x,m.y,m.z)||!validSlot(m.slot)||!near(c,m.x,m.y,m.z))return;
@@ -87,9 +121,9 @@ function perform(c,m){const r=c.room,now=Date.now();if(!r)return;
   if(r.mode==='survival'){
     if(canHarvest(c,id,m.slot)){
       const drop=Object.prototype.hasOwnProperty.call(NATURAL_DROPS,id)?NATURAL_DROPS[id]:`b:${id}`;
-      if(drop)invAdd(c,drop,1);
-      if([B.LEAVES,B.SPRUCE_LEAVES,B.BIRCH_LEAVES].includes(id)&&r.generator.h3(m.x,m.y,m.z,772)<.045)invAdd(c,'m:apple',1);
-      if(id===B.GRASS_PLANT&&r.generator.h3(m.x,m.y,m.z,773)<.15)invAdd(c,'m:berry',1);
+      if(drop)spawnDrop(r,drop,m.x,m.y,m.z,1);
+      if([B.LEAVES,B.SPRUCE_LEAVES,B.BIRCH_LEAVES].includes(id)&&r.generator.h3(m.x,m.y,m.z,772)<.045)spawnDrop(r,'m:apple',m.x,m.y,m.z,1);
+      if(id===B.GRASS_PLANT&&r.generator.h3(m.x,m.y,m.z,773)<.15)spawnDrop(r,'m:berry',m.x,m.y,m.z,1);
     }
     const s=c.inventory[m.slot];if(s&&TOOLS[s.id]){s.wear++;if(s.wear>=TOOLS[s.id].durability)c.inventory[m.slot]=null;}
     pushInv(c);
@@ -154,7 +188,7 @@ function join(c,m){if(c.room)return;
  c.hunger=Number.isFinite(prof.hunger)?Math.max(0,Math.min(20,prof.hunger)):20;
  c.x=0;c.y=50;c.z=0;c.movedOnce=false;r.players.add(c);
  const players=[...r.players].filter(p=>p!==c).map(p=>({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z}));
- send(c,{t:'welcome',id:c.id,mode:r.mode,seed:r.seed,edits:[...r.edits],players,profile:{...prof,inventory:c.inventory,health:c.health,hunger:c.hunger},time:(.25+(Date.now()-r.dayStart)/1_200_000)%1});
+ send(c,{t:'welcome',id:c.id,mode:r.mode,seed:r.seed,edits:[...r.edits],drops:[...r.drops.values()],players,profile:{...prof,inventory:c.inventory,health:c.health,hunger:c.hunger},time:(.25+(Date.now()-r.dayStart)/1_200_000)%1});
  broadcast(r,{t:'join',p:{id:c.id,name,x:c.x,y:c.y,z:c.z}},c);
  console.log(`[Beitritt] ${name} => ${r.id}`);
 }
@@ -191,7 +225,7 @@ httpServer.on('upgrade',(req,socket,head)=>{
  const k=req.headers['sec-websocket-key'];if(req.headers.upgrade?.toLowerCase()!=='websocket'||req.headers['sec-websocket-version']!=='13'||typeof k!=='string'||!/^[a-zA-Z0-9+/]{22}==$/.test(k))return socket.destroy();
  const a=crypto.createHash('sha1').update(k+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
  socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+a+'\r\n\r\n');socket.setNoDelay(true);
- const c={id:String(++ids),socket,buffer:Buffer.alloc(0),room:null,name:'',x:0,y:50,z:0,lastPos:0,lastEdit:0,lastCraft:0,lastState:0,lastChat:0,lastSwap:0,lastPong:Date.now(),inventory:[],mining:null,movedOnce:false};
+ const c={id:String(++ids),socket,buffer:Buffer.alloc(0),room:null,name:'',x:0,y:50,z:0,lastPos:0,lastEdit:0,lastCraft:0,lastState:0,lastChat:0,lastSwap:0,lastPickup:0,lastPong:Date.now(),inventory:[],mining:null,movedOnce:false};
  connections.add(c);socket.on('data',d=>receive(c,d));if(head.length)receive(c,head);
  socket.on('error',()=>socket.destroy());socket.on('close',()=>{connections.delete(c);if(c.room){c.room.players.delete(c);c.room.profiles.set(c.name,profile(c));dirty(c.room);broadcast(c.room,{t:'leave',id:c.id,name:c.name});}});
 });

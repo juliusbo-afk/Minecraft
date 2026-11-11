@@ -1,4 +1,4 @@
-# Feature-Matrix – BLOCKBOUND ULTIMATE Alpha 3.0
+# Feature-Matrix – BLOCKBOUND ULTIMATE Alpha 4.0
 
 **Referenz für die Annäherung:** Minecraft Java Edition 1.20.1. Alle Texturen/Modelle werden eigenständig erstellt. „Fertig“ bedeutet eine implementierte Funktion in dieser eigenständigen Alpha, keine 1:1-Parität mit Minecraft.
 
@@ -19,7 +19,10 @@
 | Gesundheit / Hunger / Fallschaden | Teilweise fertig | Lokal simuliert, Server noch nicht vollständig autoritativ |
 | Schwimmen / Sauerstoff | Teilweise fertig | Vereinfachtes Modell |
 | 9 Hotbar-Slots / Inventar | Teilweise fertig | 36 Slots, kein volles Drag-and-drop |
-| Item-Drops als 3D-Entitäten | Nicht umgesetzt | Drops gehen aktuell direkt ins Inventar |
+| Item-Drops als 3D-Entitäten | Teilweise fertig | Fallen sichtbar, Schweben/Rotation, Pickup nur bei Nähe; vereinfachte Physik |
+| Serverautorisiertes Item-Pickup | Fertig | Nähe, Inventarplatz und einmaliges Einsammeln getestet; persistente Drops |
+| Block-Rissanimation | Teilweise fertig | 10 prozedurale Stufen, visueller Browser-Smoke-Test offen |
+| Materialtexturen, AO und Schatten | Teilweise fertig | Verbesserte eigene Texturen, per-Vertex-Eckabschattung, PCF-Sonnenschatten, Wolken |
 | Werkzeuge / Haltbarkeit / Werkzeugstufen | Teilweise fertig | Grundstufen und Prüfung vorhanden |
 | 2×2-/3×3-Crafting-Raster | Nicht umgesetzt | Stattdessen funktioniert eine Rezeptauswahl |
 | Crafting/Rezepte | Teilweise fertig | Serverseitig geprüft, begrenztes Rezeptbuch |
@@ -45,7 +48,7 @@
 
 ## Priorität der nächsten Iteration
 
-1. Echter Browser-Smoke-Test mit CDN-Zugriff sowie Korrektur grafischer Laufzeitfehler.
+1. Echter Browser-Smoke-Test mit CDN-Zugriff einschließlich Rissanimation, Schatten und 3D-Drops.
 2. Serverseitige Spielerphysik und vollständig autoritative Hunger-/Schadensregeln.
 3. Raster-Crafting und Drag-and-drop mit sicheren Inventartransaktionen.
 4. Speichern großer Welten in IndexedDB, optimierter Chunk-Cache und Greedy-Meshing.

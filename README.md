@@ -1,8 +1,8 @@
-# BLOCKBOUND ULTIMATE – Alpha 3.0
+# BLOCKBOUND ULTIMATE – Alpha 4.0
 
 **Eigenständiges voxelbasiertes 3D-Browserspiel, inspiriert von den Spielprinzipien klassischer Sandbox-Spiele.** Der Code und die zur Laufzeit prozedural erzeugten Pixeltexturen sind eigenständig. Dies ist **kein offizielles Minecraft-Produkt** und **kein vollständiger 1:1-Nachbau**.
 
-> **Status:** Nutzbare technische Alpha. Weltgenerator, dedizierter Multiplayer-Server und Protokoll wurden automatisiert getestet. Ein vollständiger grafischer Browsertest und vollständige Gameplay-Abnahme stehen noch aus. [Genaue Feature-Matrix](docs/FEATURES.md).
+> **Status:** Nutzbare technische Alpha mit Rissanimationen und 3D-Item-Drops. Weltgenerator, dedizierter Multiplayer-Server und Protokoll wurden automatisiert getestet. Ein vollständiger grafischer Browsertest und vollständige Gameplay-Abnahme stehen noch aus. [Genaue Feature-Matrix](docs/FEATURES.md).
 
 ## Direkt starten – Windows
 
@@ -12,7 +12,7 @@
 4. Im Browser **http://localhost:3000** öffnen.
 5. Weltname und optionalen Seed eingeben, **Überleben** oder **Kreativ** auswählen, **Einzelspieler** wählen und **WELT SPIELEN** klicken.
 
-Der erste Browserstart muss die Three.js-Bibliothek von einem CDN laden; dazu wird Internet benötigt. Der Node.js-Server selbst benötigt keine weiteren npm-Abhängigkeiten.
+Der erste Browserstart muss die Three.js-Bibliothek von einem CDN laden (mit Ersatz-CDN bei Ausfall); dazu wird Internet benötigt. Der Node.js-Server selbst benötigt keine weiteren npm-Abhängigkeiten.
 
 ### Linux / macOS
 
@@ -34,7 +34,11 @@ Die Clientdatei direkt über `file://` zu öffnen, ist nicht empfohlen: ES-Modul
 - Frei wählbare Seeds; ohne Eingabe wird ein zufälliger Seed erzeugt.
 - Deterministische Weltgenerierung für positive und negative Koordinaten mit 16×16 horizontalen Chunks.
 - Zwölf generierbare Biome mit variierender Landhöhe, Wüsten-/Schneeoberflächen, Bäumen, Höhlen und Erzvorkommen.
-- Dynamisches Laden und Freigeben von Chunks; prozedural generierte eigene Texturen.
+- Dynamisches Laden und Freigeben von Chunks; detailliertere eigene Pixeltexturen mit Materialmustern, zusätzlicher Eckabschattung, Wolken, verbessertem Sonnenlicht und weichen Schatten.
+- Beim fortlaufenden Abbauen erscheint eine 10-stufige Rissanimation direkt auf dem Block; beim Zerstören entstehen Partikel.
+- Survival-Drops werden als kleine 3D-Gegenstände in der Welt dargestellt, fallen sichtbar herab und drehen/schweben knapp über dem Boden.
+- **Einsammeln:** Erst über den Drop laufen; erst danach erscheint das Item im Inventar. Volle Inventare lassen Drops liegen.
+- Im Multiplayer werden Drops serverseitig verwaltet, bei Beitritt übertragen, beim Einsammeln nur einmal vergeben und zusammen mit der Welt gespeichert.
 - Kreativmodus mit unbegrenzter Auswahl, schnellem Blockabbau und Fliegen.
 - Survival-Grundmechaniken: Lebenspunkte, Hunger, Untertauchen, Fallschaden, Werkzeugstufen, Haltbarkeit, Crafting-Rezeptauswahl, einfache Ofen-Rezepte und Respawn.
 - 36 Inventarplätze, 9 Hotbar-Slots, Welt-Speicherung im Browser, Anzeige und Löschen gespeicherter Welten.
@@ -49,7 +53,8 @@ Die Clientdatei direkt über `file://` zu öffnen, ist nicht empfohlen: ES-Modul
 | Leertaste | Springen; doppelt im Kreativmodus zum Flugwechsel |
 | Shift | Sprinten (beim Fliegen nach unten) |
 | Strg | Langsam bewegen |
-| Linksklick halten | Block abbauen |
+| Linksklick halten | Block mit fortschreitenden Rissen abbauen |
+| Über liegende Items laufen | Einsammeln ins Inventar |
 | Rechtsklick | Block platzieren / interagieren |
 | 1–9 / Mausrad | Hotbar |
 | E | Inventar und Rezeptauswahl |
@@ -59,7 +64,7 @@ Die Clientdatei direkt über `file://` zu öffnen, ist nicht empfohlen: ES-Modul
 | F3 | Zusatzinformationen |
 | Esc | Pausenmenü |
 
-**Hinweis zu Survival:** In der aktuellen Alpha werden Drops direkt ins Inventar übertragen. Es gibt noch keine vollständige 3D-Drop-/Mob-Simulation. Die Werkbank muss in der Nähe aufgestellt sein, um Werkbank-Rezepte herzustellen. Der Ofen führt aktuell vereinfachte Sofort-Rezepte aus (keine laufende Brennstoffzeit-Simulation).
+**Hinweis zu Survival:** In dieser Alpha werden abgebauten Blöcke als 3D-Drops dargestellt und erst beim Darüberlaufen ins Inventar aufgenommen. Die Drop-Physik ist vereinfacht; es gibt noch keine vollständige Mob-Simulation. Die Werkbank muss in der Nähe aufgestellt sein, um Werkbank-Rezepte herzustellen. Der Ofen führt aktuell vereinfachte Sofort-Rezepte aus (keine laufende Brennstoffzeit-Simulation).
 
 ## Multiplayer im selben WLAN
 
@@ -147,6 +152,7 @@ Tests laufen unter Node.js 20+. Eine Three.js-Browsertestsuite ist aktuell noch 
 - Weltgenerierung, Blockwerte und Mechaniken sind eine eigene Annäherung an Minecraft Java Edition, **nicht identisch** mit dessen Welten, Updates oder Originalphysik.
 - Einzelspieler-Speicherstände verwenden derzeit localStorage, nicht IndexedDB; bei sehr großen Welten kann das Speicherlimit erreicht werden.
 - Die 3D-Bibliothek wird extern geladen. Ohne Browser-Internetzugang funktioniert das 3D-Spiel nicht.
+- Die verbesserte Grafik ist stilisierte Voxel-Pixelgrafik, keine fotorealistische Grafik; große sichtbare Schatten können die Bildrate reduzieren.
 - Der Browserstart wurde nicht vollständig visuell abgenommen; unter einzelnen Grafiktreibern oder Browsern können zusätzliche Fehler auftreten.
 
 ## Entwicklungsstand

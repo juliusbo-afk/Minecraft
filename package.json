@@ -1,6 +1,6 @@
 {
   "name": "blockbound-ultimate",
-  "version": "3.0.0-alpha.1",
+  "version": "4.0.0-alpha.1",
   "type": "module",
   "private": true,
   "description": "Independent browser-based multiplayer voxel sandbox",
