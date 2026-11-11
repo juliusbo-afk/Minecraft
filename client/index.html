@@ -14,6 +14,25 @@
 <div id="pause" class="overlay hidden"><div class="dialog compact"><div class="overline">SPIEL PAUSIERT</div><h2>Pause</h2><p>Deine Bauwerke bleiben gespeichert.</p><button id="resume" class="primary">▶ Fortsetzen</button><button id="openSettings" class="secondary">⚙ Einstellungen</button><button id="backMenu" class="secondary">⌂ Zum Hauptmenü</button><div class="keys"><b>W A S D</b> Bewegung <b>LEERTASTE</b> Springen / im Kreativmodus zweimal drücken: Fliegen <b>SHIFT</b> Sprinten / Fliegen abwärts <b>STRG</b> Schleichen <b>F</b> Kreativ-Flugmodus <b>E</b> Inventar <b>1–9 / Mausrad</b> Hotbar <b>T</b> Chat <b>R</b> Essen <b>F3</b> Infos</div></div></div>
 <div id="settings" class="overlay hidden"><div class="dialog compact"><div class="overline">OPTIONEN</div><h2>Einstellungen</h2><label>SICHTWEITE: <strong id="distanceValue">3</strong> Chunks</label><input id="distanceSetting" type="range" min="2" max="5" step="1" value="3"><label>MAUSEMPFINDLICHKEIT: <strong id="mouseValue">50%</strong></label><input id="mouseSetting" type="range" min="20" max="120" step="5" value="50"><label><input id="soundSetting" type="checkbox" checked> Geräusche aktivieren</label><button id="settingsBack" class="secondary">← Zurück</button></div></div>
 <div id="death" class="overlay hidden"><div class="dialog compact death"><div class="overline">ÜBERLEBENSMODUS</div><h2>Du bist gestorben!</h2><p id="deathCause">Dein Abenteuer ist noch nicht zu Ende.</p><button id="respawn" class="primary">↻ Wiederbeleben</button><button id="deathMenu" class="secondary">Hauptmenü</button></div></div>
-<div class="startup-error hidden" id="fatal"><h2>3D-Grafik nicht geladen</h2><p>Bitte öffne das Spiel mit Chrome oder Edge und prüfe deine Internetverbindung. Die Grafikbibliothek wird über ein CDN geladen.</p></div>
-<script>setTimeout(()=>{if(!window.BLOCKBOUND_READY)document.getElementById("fatal").classList.remove("hidden")},9000)</script>
+<div class="startup-error hidden" id="fatal"><h2>Spielstart fehlgeschlagen</h2><p id="startupErrorText">Die Spielmodule konnten nicht gestartet werden.</p><p>Prüfe die Browser-Konsole (F12 → Konsole). Zum Spielen sollte die Website über HTTPS oder den lokalen Node.js-Server geöffnet werden.</p></div>
+<script>
+(()=>{
+  const fatal=document.getElementById('fatal'), label=document.getElementById('startupErrorText');
+  let lastError='';
+  const show=(message)=>{
+    if(window.BLOCKBOUND_READY)return;
+    if(message)lastError=message;
+    label.textContent=lastError||'Die 3D-Engine konnte nicht gestartet werden. Prüfe Internetverbindung und Browser-Konsole.';
+    fatal.classList.remove('hidden');
+  };
+  window.addEventListener('error',event=>{
+    if(event.target&&event.target!==window){
+      const path=event.target.src||event.target.href||'unbekannte Ressource';
+      show('Datei konnte nicht geladen werden: '+path);
+    }else show(event.message||'JavaScript-Fehler beim Spielstart.');
+  },true);
+  window.addEventListener('unhandledrejection',event=>show(event.reason?.message||String(event.reason||'Modulfehler')),true);
+  setTimeout(()=>{if(!window.BLOCKBOUND_READY)show(lastError||'Die Engine hat nach 9 Sekunden nicht geantwortet.');},9000);
+})();
+</script>
 <script type="module" src="./src/main.js"></script></body></html>
