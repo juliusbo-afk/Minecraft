@@ -1,3 +1,7 @@
+## Alpha 5 – Materialtests
+
+Zwei neue automatisierte Tests prüfen: deterministische Materialstruktur und unterscheidbare Pixelwerte sowie die isometrische Darstellung aus drei Blockflächen. Zusätzlich bestehen die fünf vorherigen Tests zu Weltgenerierung, Multiplayer und Speicherverhalten. Die WebGL-Shader-Darstellung konnte hier nicht browserbasiert verifiziert werden.
+
 # Testbericht – BLOCKBOUND ULTIMATE Alpha 4.0
 
 ## Automatisierte Tests

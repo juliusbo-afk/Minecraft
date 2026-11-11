@@ -12,6 +12,7 @@ try {
 }
 import { CHUNK, MAX_Y, SEA, ATLAS_COLS, ATLAS_ROWS, B, BLOCKS, NATURAL_DROPS, TOOLS, MATERIALS, COMMON, RECIPES, SMELT, BIOMES } from '../../shared/registry.js';
 import {createWorldGenerator} from '../../shared/worldgen.js';
+import {makeMaterialAtlas, tileForBlock, createBlockIcon, TILE_SIZE} from './materials.js';
 
 // BLOCKBOUND REFORGED · Eigenständiges, frei programmiertes Voxelspiel.
 const $ = id => document.getElementById(id);
@@ -19,6 +20,7 @@ let selectedWorldKey=null, seed=0,mode='survival',isMulti=false,room='Meine Welt
 let terrain = createWorldGenerator(0);
 let worldEdits=new Map(),chunkMap=new Map(),columnCache=terrain.columnCache,buildQueue=[],queued=new Set(),viewDistance=3,lastChunkX=null,lastChunkZ=null,dirtyQueue=[];
 let inventory=Array(36).fill(null),selected=0,health=20,hunger=20,oxygen=10,hungerDebt=0,regenTimer=0,damageCooldown=0,fallDistance=0,spawn={x:.5,y:55,z:.5},lastAutosave=0,saveTimer=null,storageId='';
+let atlasSource=null,waterShader=null,iconPreviewId=null,iconPreviewGeometry=new Map(),heldToolMat=null;
 let renderer,scene,camera,worldGroup,atlas,opaqueMat,cutMat,glassMat,waterMat,lavaMat,plantMat,sun,ambient,sky,fog,selection,raycaster,clock,started=false,paused=false,inventoryOpen=false,chatOpen=false,dead=false,flying=false,showF3=false,invTab='items';
 let player={pos:new THREE.Vector3(.5,60,.5),v:new THREE.Vector3(),grounded:false,stepSound:0},yaw=0,pitch=0,keys={},holdMine=false,holdUse=false,mineKey='',mineProgress=0,looking=null,lastUse=0,lastPosSend=0,lastMap=0,lastHud=0,frames=0,lastFPS=performance.now(),fps=0,worldTime=.25,lastJumpTap=0,sensitivity=.0022,muted=false;
 let remote=new Map(),chunksBuilt=0,logMessages=[],deathCause='',handGroup=null,handCube=null,starMesh=null,torchLights=[],lastTorchUpdate=0;
@@ -65,46 +67,16 @@ function nearBlock(type){const px=Math.floor(player.pos.x),py=Math.floor(player.
 function craft(recipe){if(isMulti){send({t:'craft',out:recipe.out});return;}if(mode==='creative')return toast('Im Kreativmodus sind alle Materialien verfügbar.');if(recipe.table&&!nearBlock(B.CRAFT))return toast('Du brauchst eine Werkbank in deiner Nähe.');if(!hasIngredients(recipe.req))return toast('Dir fehlen Materialien.');for(const [id,n] of Object.entries(recipe.req))removeItem(id,n);if(!addItem(recipe.out,recipe.n))toast('Inventar ist voll.');sound('craft');drawInventory();}
 function smelt(recipe){if(isMulti){send({t:'smelt',out:recipe.to});return;}if(mode==='creative')return;if(!nearBlock(B.FURNACE))return toast('Du benötigst einen aufgestellten Ofen.');if(totalItem(recipe.from)<1||totalItem('m:coal')<1)return toast('Du brauchst Erz/Sand und 1 Kohle.');removeItem(recipe.from);removeItem('m:coal');addItem(recipe.to);sound('craft');drawInventory();}
 
-function textureAtlas(){const S=16,W=ATLAS_COLS*S,H=ATLAS_ROWS*S,c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
- const paints={
- 0:['#5e9346','#77a657','#49833d'],1:['#85603e','#5d903e','#9f734c'],2:['#805a3c','#986b44','#61472f'],3:['#84878c','#969ba0','#666b72'],4:['#6e757d','#91979d','#555e67'],5:['#b99360','#d6ad76','#8b6945'],6:['#81613c','#a27e50','#58412d'],7:['#5e964e','#85ac62','#316a40'],8:['#dec990','#eadba3','#c5b37b'],9:['#cab884','#e1cf91','#b8a270'],10:['#5798be','#61b0cd','#337db5'],11:['#bde3ed','#e4faff','#8caeba'],12:['#777e84','#30383a','#999ba0'],13:['#858489','#c48d5c','#707782'],14:['#848b8c','#e5c757','#79736e'],15:['#747d83','#4ee1d3','#6fabb3'],16:['#383a40','#55565d','#1f2428'],17:['#e8eef0','#f9ffff','#c7d2d7'],18:['#ddd9d1','#ffffff','#8b918d'],19:['#705b49','#4e4133','#987f63'],20:['#48705a','#75936c','#315441'],21:['#b78d55','#d4b17d','#694c2f'],22:['#92969a','#50585b','#bcc0bc'],23:['#d7b667','#eddd8b','#af703d'],24:['#93908a','#b5b1a9','#6c6e73'],25:['#98aab0','#a9c0c8','#7a9099'],26:['#a35b50','#ce8168','#88463f'],27:['#999da1','#c1c3bd','#757a7b'],28:['#ddd5c1','#524d46','#f9f2db'],29:['#75a565','#92bc6c','#46764c'],30:['#4b9a44','#2d6d31','#80b05b'],31:['#c47c32','#f9a53e','#9e5522'],32:['#64aa59','#94d17b','#39803b'],33:['#8dad56','#f2bd4e','#dc686a'],34:['#f57426','#f8b236','#ca351b'],35:['#bd986d','#7b552d','#e2b87f'],36:['#7e6b54','#a28d6e','#4e3f30'],37:['#ddd7c0','#afa38e','#fff5d9']
- };
- function fill(tile,x,y,color){ctx.fillStyle=color;ctx.fillRect((tile%ATLAS_COLS)*S+x,Math.floor(tile/ATLAS_COLS)*S+y,1,1)}
- for(const [key,pal] of Object.entries(paints)){const t=+key;for(let y=0;y<S;y++)for(let x=0;x<S;x++){
-  const v=h3(x,y,t,543),n=h3(x+21,y+5,t,544);let k=v<.19?2:v>.81?1:0;
-  if(t===1){if(y<3+(n>.74?1:0))k=v>.45?1:2;else k=0;}
-  if(t===18){if(y<4)k=v>.21?1:0;else k=v>.7?2:0;}
-  if([5,21].includes(t)){k=y%5===0?2:v>.82?1:0;if((y===0||y===8)&&x===0)k=2;}
-  if([6,19].includes(t))k=x%5===0?2:v>.78?1:0;
-  if(t===28)k=n>.89?1:v>.69?2:0;
-  if(t===30)k=x%4===0?1:n<.2?2:0;
-  if(t===31)k=x%4===0?2:v>.8?1:0;
-  if(t===22)k=(x>3&&x<13&&y>4&&y<12)?(n>.16?1:2):v>.78?1:0;
-  if(t===26)k=(y%5===0||((Math.floor(y/5)%2?x+4:x)%8===0))?1:v>.6?0:2;
-  if(t===27)k=(y%7===0||((Math.floor(y/7)%2?x+6:x)%8===0))?2:v>.7?1:0;
-  if(t===35||t===36||t===37)k=(x===0||y===0||x===15||y===15)?2:Math.max(Math.abs(x-7.5),Math.abs(y-7.5))>4?0:v>.74?1:2;
-  let alpha=255;if([7,20,29].includes(t)&&n<.13)alpha=0;
-  if(t===32&&!((x===5||x===9||x===12)&&y>5))alpha=0;
-  if(t===33&&!(Math.abs(x-8)+Math.abs(y-5)<5||(Math.abs(x-8)<2&&y>6)))alpha=0;
-  if(t===23&&!(Math.abs(x-8)<2&&y>5||Math.abs(x-8)<3&&y>=2&&y<7))alpha=0;
-  if(t===11&&(x===0||x===15||y===0||y===15))k=2;
-  if(t===23){k=(Math.abs(x-8)<2&&y>5)?2:0; if(y<7&&Math.abs(x-8)<3)k=1;}
-  if(t===33){k=Math.abs(x-8)+Math.abs(y-5)<5?1:Math.abs(x-8)<2?0:2;}
-  if(t===32)k=(x===5||x===9||x===12)&&y>5?1:0;
-  if([12,13,14,15].includes(t)){const ore=n>.76&&v>.45;if(ore)k=1;else k=v>.88?2:0;}
-  // Felsfugen, kleine Steinadern und Holzmaserung: dezente Materialdetails pro Pixel.
-  if([3,4,12,13,14,15,16,24,27].includes(t)){
-    const fissure=Math.abs(Math.sin((x*1.9+y*1.45+t*.51)+n*.95));
-    if(fissure<.19&&v<.68)k=2;
-    if(n>.93)k=1;
-  }
-  if([6,19].includes(t)&&((x+Math.floor(y/5))%7===0))k=2;
-  if([8,9,25].includes(t)&&v>.9)k=1;
-  const [r,g,b]=parseHex(pal[k]);ctx.fillStyle=`rgba(${r},${g},${b},${alpha/255})`;ctx.fillRect((t%ATLAS_COLS)*S+x,Math.floor(t/ATLAS_COLS)*S+y,1,1);
- }}
- const tex=new THREE.CanvasTexture(c);tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.NearestMipmapNearestFilter;tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=2;return tex;
+function textureAtlas(){
+ atlasSource=makeMaterialAtlas();
+ const t=new THREE.CanvasTexture(atlasSource);
+ t.magFilter=THREE.NearestFilter;
+ t.minFilter=THREE.NearestMipmapNearestFilter;
+ t.generateMipmaps=true;
+ t.colorSpace=THREE.SRGBColorSpace;
+ t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return t;
 }
-function parseHex(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
 const FACES=[
  {d:[0,0,1],v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]],light:.82},
  {d:[0,0,-1],v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]],light:.73},
@@ -113,7 +85,7 @@ const FACES=[
  {d:[0,1,0],v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]],light:1},
  {d:[0,-1,0],v:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]],light:.53}
 ];
-function tileFor(id,face){if(id===B.GRASS)return face===4?0:face===5?2:1;if(id===B.SNOW_GRASS)return face===4?17:face===5?2:18;if(id===B.LOG)return face===4||face===5?35:6;if(id===B.SPRUCE_LOG)return face===4||face===5?36:19;if(id===B.BIRCH_LOG)return face===4||face===5?37:28;if(id===B.CRAFT)return face===4?21:5;return BLOCKS[id].tile;}
+const tileFor=tileForBlock;
 function buffer(){return {pos:[],uv:[],nor:[],col:[],indices:[]};}
 function quad(buf,points,tile,normal,bright,cornerAO=null){let start=buf.pos.length/3,u=tile%ATLAS_COLS,v=Math.floor(tile/ATLAS_COLS),eps=.001;const uv=[[u/ATLAS_COLS+eps,(ATLAS_ROWS-v-1)/ATLAS_ROWS+eps],[(u+1)/ATLAS_COLS-eps,(ATLAS_ROWS-v-1)/ATLAS_ROWS+eps],[(u+1)/ATLAS_COLS-eps,(ATLAS_ROWS-v)/ATLAS_ROWS-eps],[u/ATLAS_COLS+eps,(ATLAS_ROWS-v)/ATLAS_ROWS-eps]];
  for(let i=0;i<4;i++){buf.pos.push(...points[i]);buf.nor.push(...normal);buf.uv.push(...uv[i]);buf.col.push(bright*(cornerAO?.[i]??1),bright*(cornerAO?.[i]??1),bright*(cornerAO?.[i]??1));}buf.indices.push(start,start+1,start+2,start,start+2,start+3);
@@ -148,7 +120,7 @@ function buildChunk(c){if(c.group)disposeChunk(c);const opaque=buffer(),cut=buff
   const buf=id===B.WATER?water:id===B.LAVA?lava:id===B.GLASS?glass:info.leaves?cut:opaque;
   for(let f=0;f<6;f++){
    const face=FACES[f],nn=getBlock(x+face.d[0],y+face.d[1],z+face.d[2]);if(!isVisibleFace(id,nn))continue;
-   const height=(id===B.WATER||id===B.LAVA)?.88:1;
+   const height=(id===B.WATER||id===B.LAVA)?(getBlock(x,y+1,z)===id?1:.90):1;
    const points=face.v.map(p=>[x+p[0],y+p[1]*height,z+p[2]]);
    quad(buf,points,tileFor(id,f),face.d,face.light,cornerShading(x,y,z,face));
   }
@@ -186,7 +158,16 @@ function setupScene(){scene=new THREE.Scene();sky=new THREE.Color(0x89bde1);scen
  worldGroup=new THREE.Group();scene.add(worldGroup);atlas=textureAtlas();opaqueMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.94,metalness:0});
  cutMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,alphaTest:.34,side:THREE.DoubleSide,roughness:.9});
  glassMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,transparent:true,opacity:.44,depthWrite:false,side:THREE.DoubleSide,roughness:.14,metalness:.02});
- waterMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,transparent:true,opacity:.70,depthWrite:false,side:THREE.DoubleSide,roughness:.19,metalness:.04});
+ waterMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,transparent:true,opacity:.66,depthWrite:false,side:THREE.DoubleSide,roughness:.13,metalness:.13,color:0xccecff});
+ // Small connected surface waves and sunlight shimmer. World-coordinate calculations
+ // make adjacent chunk surfaces meet without seams. No original game shader is used.
+ waterMat.onBeforeCompile=(shader)=>{
+  shader.uniforms.uFlowTime={value:0};waterShader=shader;
+  shader.vertexShader=shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uFlowTime;\nvarying vec3 vWaterWorld;');
+  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvWaterWorld = position;\nif(normal.y > .5) { transformed.y += .022*sin(position.x*.92 + uFlowTime*1.4)*cos(position.z*1.13 + uFlowTime*.8); }');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uFlowTime;\nvarying vec3 vWaterWorld;');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nfloat waveShine=.5+.5*sin(vWaterWorld.x*.9+vWaterWorld.z*1.5+uFlowTime*1.7);\nfloat ripples=.5+.5*sin(vWaterWorld.x*2.3-vWaterWorld.z*1.6+uFlowTime*2.4);\ndiffuseColor.rgb *= .91 + .15*waveShine + .08*ripples;');
+ };
  lavaMat=new THREE.MeshBasicMaterial({map:atlas,vertexColors:true,transparent:true,opacity:.92,depthWrite:false,side:THREE.DoubleSide});
  plantMat=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,transparent:true,alphaTest:.36,side:THREE.DoubleSide,roughness:.85});
  scene.add(camera);handGroup=new THREE.Group();camera.add(handGroup);handGroup.position.set(.62,-.60,-.84);
@@ -203,7 +184,7 @@ function setupScene(){scene=new THREE.Scene();sky=new THREE.Color(0x89bde1);scen
  setupClouds();
  raycaster=new THREE.Raycaster();clock=new THREE.Clock();window.addEventListener('resize',()=>{if(!renderer)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 }
-function updateSky(dt){worldTime=(worldTime+dt/(20*60))%1;let a=worldTime*Math.PI*2,day=Math.max(0,Math.sin(a)),twilight=Math.max(0,1-Math.abs(Math.sin(a))*4);
+function updateSky(dt){if(waterShader)waterShader.uniforms.uFlowTime.value+=dt;worldTime=(worldTime+dt/(20*60))%1;let a=worldTime*Math.PI*2,day=Math.max(0,Math.sin(a)),twilight=Math.max(0,1-Math.abs(Math.sin(a))*4);
  sun.target.position.set(player.pos.x,player.pos.y+1,player.pos.z);
  sun.position.set(player.pos.x+Math.cos(a)*75,player.pos.y+Math.sin(a)*90+8,player.pos.z+28);sun.target.updateMatrixWorld();
  if(cloudGroup){cloudGroup.position.set(player.pos.x+Math.sin(worldTime*6.28)*8,0,player.pos.z+Math.cos(worldTime*6.28)*6);cloudGroup.visible=day>.08;for(const cloud of clouds)cloud.material.opacity=.12+day*.28;}if(starMesh){starMesh.position.set(player.pos.x,0,player.pos.z);starMesh.material.opacity=Math.max(0,1-day*2.5);}
@@ -291,8 +272,37 @@ function message(name,msg,system=false){const box=$('messages'),row=document.cre
 function sound(type){if(muted)return;try{sound.ctx??=new (window.AudioContext||window.webkitAudioContext)();const c=sound.ctx;if(c.state==='suspended')c.resume();const osc=c.createOscillator(),gain=c.createGain();osc.type=type==='break'?'square':type==='craft'?'sine':'triangle';let hz=type==='break'?190:type==='hurt'?125:type==='craft'?470:type==='pickup'?680:290;osc.frequency.setValueAtTime(hz,c.currentTime);osc.frequency.exponentialRampToValueAtTime(hz*.58,c.currentTime+.085);gain.gain.setValueAtTime(.027,c.currentTime);gain.gain.exponentialRampToValueAtTime(.0001,c.currentTime+.11);osc.connect(gain).connect(c.destination);osc.start();osc.stop(c.currentTime+.11);}catch{}}
 function showStats(){let hearts=$('hearts'),food=$('hunger');if(mode==='creative'){$('survivalStats').classList.add('hidden');return;}$('survivalStats').classList.remove('hidden');hearts.textContent='';food.textContent='';
  for(let i=0;i<10;i++){let h=document.createElement('span');h.className='heart'+(health<=i*2?' empty':'');h.textContent=health>i*2?'♥':'♡';hearts.appendChild(h);let f=document.createElement('span');f.className='food'+(hunger<=i*2?' empty':'');f.textContent=hunger>i*2?'◆':'◇';food.appendChild(f);}}
-function makeIcon(id,size=26){const meta=itemInfo(id);if(!meta)return document.createTextNode('');if(meta.block!==undefined){const span=document.createElement('span');span.className='cube-icon';span.style.background=meta.color;span.style.width=size+'px';span.style.height=size+'px';return span;}const span=document.createElement('span');span.className='item-emoji';span.textContent=meta.icon||'▣';span.style.fontSize=Math.round(size*.87)+'px';return span;}
-function drawHotbar(){const held=currentItem();if(handCube){const inf=held&&itemInfo(held.id);handCube.material.color.set(inf?.color|| (TOOLS[held?.id]?'#8a8c8e':'#af8e72'));handCube.visible=!!held;}const bar=$('hotbar');bar.textContent='';for(let i=0;i<9;i++){const s=inventory[i],cell=document.createElement('div');cell.className='slot'+(selected===i?' current':'');cell.title=s?itemInfo(s.id)?.name||s.id:'Leer';const key=document.createElement('span');key.className='keynum';key.textContent=i+1;cell.append(key);
+function makeIcon(id,size=26){
+ const meta=itemInfo(id);if(!meta)return document.createTextNode('');
+ if(meta.block!==undefined){
+  const img=document.createElement('img');img.className='block-icon';img.alt='';
+  img.width=size;img.height=size;
+  img.src=atlasSource?createBlockIcon(atlasSource,meta.block):'';
+  img.style.width=size+'px';img.style.height=size+'px';
+  return img;
+ }
+ const span=document.createElement('span');span.className='item-emoji';
+ span.textContent=meta.icon||'▣';span.style.fontSize=Math.round(size*.87)+'px';return span;
+}
+function updateHeldBlockPreview(item){
+ if(!handCube||!atlas)return;
+ const key=item?.id||'';if(iconPreviewId===key)return;
+ iconPreviewId=key;const meta=item?itemInfo(item.id):null;
+ handCube.visible=!!item;
+ if(!item)return;
+ if(meta?.block!==undefined){
+  let geometry=iconPreviewGeometry.get(meta.block);
+  if(!geometry){const buf=buffer();for(let f=0;f<FACES.length;f++){
+   const face=FACES[f];quad(buf,face.v,tileFor(meta.block,f),face.d,face.light);
+  }geometry=meshGeometry(buf);geometry.translate(-.5,-.5,-.5);iconPreviewGeometry.set(meta.block,geometry);}
+  handCube.geometry=geometry;handCube.material=opaqueMat;handCube.scale.setScalar(.30);
+ }else{
+  handCube.geometry=iconPreviewGeometry.get('plain')||new THREE.BoxGeometry(.29,.29,.29);
+  iconPreviewGeometry.set('plain',handCube.geometry);
+  heldToolMat??=new THREE.MeshLambertMaterial({color:0xb9b6ac});handCube.material=heldToolMat;handCube.scale.setScalar(1);
+ }
+}
+function drawHotbar(){const held=currentItem();if(handCube)updateHeldBlockPreview(held);const bar=$('hotbar');bar.textContent='';for(let i=0;i<9;i++){const s=inventory[i],cell=document.createElement('div');cell.className='slot'+(selected===i?' current':'');cell.title=s?itemInfo(s.id)?.name||s.id:'Leer';const key=document.createElement('span');key.className='keynum';key.textContent=i+1;cell.append(key);
  if(s){cell.append(makeIcon(s.id));const count=document.createElement('span');count.className='count';count.textContent=mode==='creative'?'∞':s.count>1?s.count:TOOLS[s.id]?Math.max(0,Math.round(100*(1-s.wear/TOOLS[s.id].durability)))+'%':'';cell.append(count);}cell.addEventListener('click',()=>{selected=i;drawHotbar();if(!paused&&!inventoryOpen)lockPointer();});bar.append(cell);}}
 function setTab(tab){invTab=tab;for(const name of ['Items','Craft','Furnace'])$('tab'+name).classList.toggle('active',name.toLowerCase()===tab);$('itemGrid').classList.toggle('hidden',tab!=='items');$('recipeGrid').classList.toggle('hidden',tab!=='craft');$('furnaceGrid').classList.toggle('hidden',tab!=='furnace');drawInventory();}
 function drawInventory(){if(!inventoryOpen)return;const grid=$('itemGrid');grid.textContent='';$('inventoryTitle').textContent=mode==='creative'?'Kreativ-Inventar':'Inventar';

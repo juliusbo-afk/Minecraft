@@ -1,0 +1,15 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BLOCKBOUND – Materialgalerie</title><style>
+:root{color-scheme:dark}body{background:linear-gradient(145deg,#122733,#0a161d);font:14px system-ui;color:#eaf4e9;padding:24px;max-width:1250px;margin:auto}h1{font-size:28px;margin-bottom:8px}.subtitle{color:#b7c9d0;margin-bottom:22px}.materials{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:14px}.material{border:1px solid #486168;background:#1d3541;border-radius:12px;padding:16px;text-align:center;box-shadow:0 4px 18px #0003}.material img{width:92px;height:92px;image-rendering:pixelated;display:block;margin:auto}.material .name{font-size:12px;font-weight:750;margin-top:10px}.material .swatches{display:flex;gap:5px;justify-content:center;margin-top:9px}.material .swatches canvas{width:32px;height:32px;image-rendering:pixelated;border-radius:3px;border:1px solid #839b9c65}footer{margin-top:30px;color:#99afbd}
+</style></head><body><h1>BLOCKBOUND – Materialgalerie</h1><p class="subtitle">Originale prozedurale Pixelmaterialien, Seiten- und Oberflächen mit 3D-Inventarsymbolen.</p><div class="materials" id="materials"></div><footer>Entwicklervorschau – die fertigen Materialien werden auch im Spiel verwendet.</footer><script type="module">
+import {makeMaterialAtlas,createBlockIcon,tileForBlock,TILE_SIZE} from './src/materials.js';
+import {BLOCKS,ATLAS_COLS} from '../shared/registry.js';
+const canvas=makeMaterialAtlas(),root=document.querySelector('#materials');
+for(const block of BLOCKS.slice(1)){
+ const tile=document.createElement('div');tile.className='material';
+ const ico=document.createElement('img');ico.src=createBlockIcon(canvas,block.id);ico.alt=block.name;tile.append(ico);
+ const name=document.createElement('div');name.className='name';name.textContent=block.name;tile.append(name);
+ const samples=document.createElement('div');samples.className='swatches';
+ for(const face of [4,0]){const c=document.createElement('canvas');c.width=32;c.height=32;const ctx=c.getContext('2d');const t=tileForBlock(block.id,face);ctx.drawImage(canvas,(t%ATLAS_COLS)*TILE_SIZE,Math.floor(t/ATLAS_COLS)*TILE_SIZE,TILE_SIZE,TILE_SIZE,0,0,32,32);samples.append(c)}tile.append(samples);root.append(tile);
+}
+window.TEST_MATERIALS_READY=true;
+</script></body></html>

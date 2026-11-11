@@ -1,8 +1,23 @@
-# BLOCKBOUND ULTIMATE – Alpha 4.0
+# BLOCKBOUND ULTIMATE – Alpha 5.0
 
 **Eigenständiges voxelbasiertes 3D-Browserspiel, inspiriert von den Spielprinzipien klassischer Sandbox-Spiele.** Der Code und die zur Laufzeit prozedural erzeugten Pixeltexturen sind eigenständig. Dies ist **kein offizielles Minecraft-Produkt** und **kein vollständiger 1:1-Nachbau**.
 
-> **Status:** Nutzbare technische Alpha mit Rissanimationen und 3D-Item-Drops. Weltgenerator, dedizierter Multiplayer-Server und Protokoll wurden automatisiert getestet. Ein vollständiger grafischer Browsertest und vollständige Gameplay-Abnahme stehen noch aus. [Genaue Feature-Matrix](docs/FEATURES.md).
+> **Status:** Nutzbare technische Alpha mit materialgenauen 3D-Inventaricons, neuen Pixeltexturen, Wassereffekten, Rissanimationen und 3D-Item-Drops. Weltgenerator, dedizierter Multiplayer-Server und Protokoll wurden automatisiert getestet. Ein vollständiger grafischer Browsertest und vollständige Gameplay-Abnahme stehen noch aus. [Genaue Feature-Matrix](docs/FEATURES.md).
+
+
+## Grafik-Update: Originale 32×32-Materialien (Alpha 5.0)
+
+- Grasoberseiten, Erdseiten und reine Erde besitzen jetzt **unterschiedliche Pixeltexturen** mit Bodenkrümeln, Grasbüscheln und feiner Körnung.
+- Eichen-, Fichten- und Birkenstämme zeigen **individuelle Rindenstruktur**. Auf den Stirnflächen sind Jahresringe erkennbar.
+- Sand, Stein, Bruchstein, Ziegel, Kohle-/Eisen-/Gold-/Diamanterz, Schnee und Laub wurden ebenfalls neu gezeichnet.
+- **Wasseroberflächen** bekommen subtil bewegte Wellen und Lichtreflexe über einen Shader. Durchgehende Wassersäulen vermeiden künstliche 0,1-Block-Lücken.
+- Im Inventar, in der Hotbar und im Rezeptmenü erscheinen **isometrische 3D-Blockicons mit denselben Texturen wie in der Spielwelt**. Auch die Hand zeigt den gehaltenen Block texturiert.
+- Eine **[Materialgalerie](client/material-preview.html)** (`/client/material-preview.html` beim lokalen Server oder unter GitHub Pages) zeigt alle Texturen, ohne Three.js von einem CDN laden zu müssen.
+- Die Weltengenerierung, Seeds und Mehrspieler-Protokolle bleiben unverändert. Bestehende Welten behalten ihre Blöcke.
+
+**Wichtig:** Die eigene Materialästhetik ist an blockbasierte Sandbox-Spiele angelehnt, aber **keine Kopie der geschützten Minecraft-Originaltexturen**. Die Grafik ist stilisierte, detaillierte Pixel-Voxelgrafik – nicht fotorealistisch.
+
+**Grafiktest:** Die Texturgenerierung wurde gesondert anhand von Pixeldaten und Tile-Zuordnungen geprüft. Die Shaderdarstellung im echten WebGL-Browser benötigt noch eine vollständige manuelle Abnahme.
 
 ## Direkt starten – Windows
 
@@ -117,9 +132,11 @@ Der Root-`index.html` leitet auf `client/index.html` weiter. Die ES-Module laden
 BLOCKBOUND_ULTIMATE/
   index.html           Weiterleitung für GitHub Pages
   client/
+    material-preview.html  Vorschau aller Blockmaterialien
     index.html         Menü und HUD
     styles/main.css    Layout und responsive Darstellung
     src/main.js        Browser-Spielschleife/Rendering/Gameplay
+    src/materials.js   Originale 32×32-Texturen und 3D-Blockicons
   shared/
     registry.js        Blöcke, Werkzeuge, Rezepte, Biome
     worldgen.js        Gemeinsame deterministische Terrain-Logik

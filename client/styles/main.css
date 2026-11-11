@@ -7,3 +7,10 @@
 .world-row{display:flex;gap:5px}.world-select{flex:1;min-width:0;text-align:left;padding:9px;background:#18333b;color:#e0efdd;border:1px solid #506a60;border-radius:5px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .world-select:hover{border-color:#b4e77a}.world-delete{border:1px solid #825450;background:#452a2b;color:#f7d3ce;border-radius:5px;padding:0 12px}
 @media(max-width:750px){.menu-shell{grid-template-columns:1fr}.hero{min-height:240px;padding:22px}.hero h1{font-size:58px}.landscape{display:none}.launch{max-height:unset}.itemgrid{grid-template-columns:repeat(5,1fr)}}
+
+/* Pixel-perfect textured voxel items. Icons show the corresponding top and side material. */
+.block-icon{object-fit:contain;image-rendering:pixelated;image-rendering:crisp-edges;filter:drop-shadow(0 2px 2px #0008);display:block;flex:none}
+.slot .block-icon{width:36px!important;height:36px!important}
+.invslot .block-icon{width:37px!important;height:37px!important}
+.recipe-icon .block-icon{width:36px!important;height:36px!important}
+.slot.current .block-icon{filter:drop-shadow(0 2px 3px #000a) saturate(1.12)}

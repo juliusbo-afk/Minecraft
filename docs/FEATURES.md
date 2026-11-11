@@ -1,3 +1,12 @@
+## Alpha 5 – Material- und UI-Upgrade
+
+- Originale prozedurale 32×32-Texturen für Blocktypen: **fertig, Pixeldaten getestet**
+- Baumrinde und sichtbare Jahresringe: **fertig, Texturmuster getestet**
+- Verschiedene Texturen für Gras-Ober-/Seite und Erdboden: **fertig, Zuordnung getestet**
+- Materialgenaue 3D-Inventarsymbole (Hotbar, Inventar, Rezepte): **fertig, Icon-Geometrie geprüft; Browsertest offen**
+- Animiertes Wasser mit Shader: **implementiert, WebGL-Grafiktest offen**
+- Originaltexturen von Minecraft: **nicht enthalten**, eigenständige Assets
+
 # Feature-Matrix – BLOCKBOUND ULTIMATE Alpha 4.0
 
 **Referenz für die Annäherung:** Minecraft Java Edition 1.20.1. Alle Texturen/Modelle werden eigenständig erstellt. „Fertig“ bedeutet eine implementierte Funktion in dieser eigenständigen Alpha, keine 1:1-Parität mit Minecraft.
