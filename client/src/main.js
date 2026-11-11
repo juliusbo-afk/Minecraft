@@ -1,11 +1,22 @@
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js';
+// Die Grafikbibliothek über zwei CDNs laden und verständliche Fehler ermöglichen.
+let THREE;
+try {
+  THREE = await import('https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js');
+} catch (primaryError) {
+  try {
+    THREE = await import('https://unpkg.com/three@0.187.0/build/three.module.js');
+  } catch (fallbackError) {
+    throw new Error('Three.js konnte über beide CDNs nicht geladen werden. Prüfe Internet, Content-Blocker und Browser-Konsole.', {cause: fallbackError});
+  }
+}
 import { CHUNK, MAX_Y, SEA, ATLAS_COLS, ATLAS_ROWS, B, BLOCKS, NATURAL_DROPS, TOOLS, MATERIALS, COMMON, RECIPES, SMELT, BIOMES } from '../../shared/registry.js';
 import {createWorldGenerator} from '../../shared/worldgen.js';
 
 // BLOCKBOUND REFORGED · Eigenständiges, frei programmiertes Voxelspiel.
 const $ = id => document.getElementById(id);
 let selectedWorldKey=null, seed=0,mode='survival',isMulti=false,room='Meine Welt',playerName='Spieler',socket=null,clientId=null,serverUrl='',online=1;
+let terrain = createWorldGenerator(0);
 let worldEdits=new Map(),chunkMap=new Map(),columnCache=terrain.columnCache,buildQueue=[],queued=new Set(),viewDistance=3,lastChunkX=null,lastChunkZ=null,dirtyQueue=[];
 let inventory=Array(36).fill(null),selected=0,health=20,hunger=20,oxygen=10,hungerDebt=0,regenTimer=0,damageCooldown=0,fallDistance=0,spawn={x:.5,y:55,z:.5},lastAutosave=0,saveTimer=null,storageId='';
 let renderer,scene,camera,worldGroup,atlas,opaqueMat,cutMat,glassMat,waterMat,lavaMat,plantMat,sun,ambient,sky,fog,selection,raycaster,clock,started=false,paused=false,inventoryOpen=false,chatOpen=false,dead=false,flying=false,showF3=false,invTab='items';
@@ -13,7 +24,6 @@ let player={pos:new THREE.Vector3(.5,60,.5),v:new THREE.Vector3(),grounded:false
 let remote=new Map(),chunksBuilt=0,logMessages=[],deathCause='',handGroup=null,handCube=null,starMesh=null,torchLights=[],lastTorchUpdate=0;
 const particles=[],debrisGeo=new THREE.BoxGeometry(.12,.12,.12),debrisMats=new Map();
 const UP=new THREE.Vector3(0,1,0), tempV=new THREE.Vector3();
-let terrain = createWorldGenerator(0);
 function h2(...args){ return terrain.h2(...args); }
 function h3(...args){ return terrain.h3(...args); }
 function column(...args){ return terrain.column(...args); }
@@ -439,4 +449,5 @@ function listLocalWorlds(){
 listLocalWorlds();
 
 window.BLOCKBOUND_READY=true;
+document.getElementById("fatal")?.classList.add("hidden");
 
