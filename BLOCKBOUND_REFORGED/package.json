@@ -1,0 +1,9 @@
+{
+  "name": "blockbound-reforged",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Eigenständiges 3D-Browser-Voxelspiel mit Kreativ, Überleben und Multiplayer",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED"
+}
